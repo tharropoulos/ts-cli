@@ -1,4 +1,5 @@
-import { logger } from "~/src/utils/logger";
+import { logger } from "./logger";
+import { ZodError } from "zod";
 
 type ErrorWithMessage = {
   message: string;
@@ -30,8 +31,19 @@ function getErrorMessage(error: unknown) {
   return toErrorWithMessage(error).message;
 }
 
+function handleZodError(error: ZodError) {
+  error.errors.map((err) =>
+    logger.error(`error for argument '${err.path.join(".")}': ${err.message}`),
+  );
+}
+
 function handleError(error: unknown) {
-  logger.error(getErrorMessage(error));
+  if (error instanceof ZodError) {
+    handleZodError(error);
+  } else {
+    logger.error(getErrorMessage(error));
+  }
+
   process.exit(1);
 }
 
