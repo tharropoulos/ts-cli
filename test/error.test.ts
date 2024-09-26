@@ -1,7 +1,7 @@
+import { handleError } from "../src/utils/error";
+import { logger } from "../src/utils/logger";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { handleError } from "~/src/utils/error";
-import { logger } from "~/src/utils/logger";
+import { z } from "zod";
 
 vi.mock("../src/utils/logger", () => ({
   logger: {
@@ -80,6 +80,64 @@ describe("Error Handler", () => {
       handleError(circularReference);
 
       expect(logger.error).toHaveBeenCalledWith("[object Object]");
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it("handles ZodError with single error", () => {
+      const schema = z.object({
+        name: z.string(),
+      });
+      const result = schema.safeParse({ name: 123 });
+      if (!result.success) {
+        handleError(result.error);
+      }
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "error for argument 'name': Expected string, received number",
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it("handles ZodError with multiple errors", () => {
+      const schema = z.object({
+        name: z.string(),
+        age: z.number().positive(),
+      });
+      const result = schema.safeParse({ name: 123, age: -5 });
+      if (!result.success) {
+        handleError(result.error);
+      }
+
+      expect(logger.error).toHaveBeenCalledTimes(2);
+      expect(logger.error).toHaveBeenNthCalledWith(
+        1,
+        "error for argument 'name': Expected string, received number",
+      );
+      expect(logger.error).toHaveBeenNthCalledWith(
+        2,
+        "error for argument 'age': Number must be greater than 0",
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it("handles ZodError with nested path", () => {
+      const schema = z.object({
+        user: z.object({
+          details: z.object({
+            age: z.number().positive(),
+          }),
+        }),
+      });
+
+      const result = schema.safeParse({ user: { details: { age: -5 } } });
+
+      if (!result.success) {
+        handleError(result.error);
+      }
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "error for argument 'user.details.age': Number must be greater than 0",
+      );
       expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
